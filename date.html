@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Date Range Picker</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.css" />
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/moment@2.29.1/moment.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.min.js"></script>
+  <style>
+    .date-picker-container {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      border: 1px solid #d1d5db;
+      border-radius: 8px;
+      padding: 12px 12px;
+      font-size: 14px;
+      color: #333;
+      width: 180px;
+      background-color: white;
+      gap: 8px;
+      cursor: pointer;
+    }
+
+    #dateRangePicker {
+      border: none;
+      outline: none;
+      width: 100%;
+      font-size: 14px;
+      pointer-events: none;
+      background-color: transparent;
+    }
+    .gray-out {
+      color: rgb(160, 160, 160) !important;
+      pointer-events: auto !important;
+    }
+    .arrow-down {
+      width: 14px;
+      height: 14px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Date Range Picker</h1>
+  <div class="date-picker-container" id="datePickerWrapper">
+    <input type="text" id="dateRangePicker" placeholder="Select Date Range" />
+    <svg viewBox="0 0 11 6" fill="none" xmlns="http://www.w3.org/2000/svg" class="arrow-down">
+      <path d="M9.78996 1.30495L6.25829 4.83661C5.84121 5.2537 5.15871 5.2537 4.74163 4.83661L1.20996 1.30495" stroke="#797D8A" stroke-width="1.5" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"></path>
+    </svg>
+  </div>
+
+  <script>
+    const a = [
+      { "date": "2025-03-08T04:50:48.122Z", "data": "1" },
+      { "date": "2025-03-09T04:50:48.122Z", "data": "2" },
+      { "date": "2025-03-10T04:50:48.122Z", "data": "3" },
+      { "date": "2025-03-11T04:50:48.122Z", "data": "4" },
+      { "date": "2025-03-12T04:50:48.122Z", "data": "5" },
+      { "date": "2025-03-13T04:50:48.122Z", "data": "6" },
+      { "date": "2025-03-18T04:50:48.122Z", "data": "11" },
+      { "date": "2025-03-18T04:50:48.122Z", "data": "112312" },
+      { "date": "2025-03-25T04:50:48.122Z", "data": "18" },
+      { "date": "2025-04-26T04:50:48.122Z", "data": "19" }
+    ];
+
+    const uniqueData = a.reduce((acc, item) => {
+      const date = moment(item.date).format('YYYY-MM-DD');
+      if (!acc.find(el => moment(el.date).format('YYYY-MM-DD') === date)) {
+        acc.push(item);
+      }
+      return acc;
+    }, []);
+
+    const validDates = uniqueData.map(item => moment(item.date).format('YYYY-MM-DD'));
+
+    $('#dateRangePicker').daterangepicker({
+      locale: { format: 'DD/MM/YYYY', cancelLabel: 'Clear' },
+      isCustomDate: function(date) {
+        return validDates.includes(date.format('YYYY-MM-DD')) ? '' : 'gray-out';
+      }
+    }, function(start, end) {
+      const filteredData = uniqueData.filter(item => {
+        const itemDate = moment(item.date).format('YYYY-MM-DD');
+        return itemDate >= start.format('YYYY-MM-DD') && itemDate <= end.format('YYYY-MM-DD');
+      });
+
+      if (filteredData.length === 0) {
+     
+        $('#dateRangePicker').val('');
+      } else {
+        console.log(filteredData);
+      }
+    });
+
+    $('#dateRangePicker').on('cancel.daterangepicker', function(ev, picker) {
+      $(this).val('');
+    });
+
+    document.getElementById('datePickerWrapper').addEventListener('click', function() {
+      $('#dateRangePicker').click();
+    });
+  </script>
+</body>
+</html>
