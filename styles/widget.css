@@ -1,0 +1,31 @@
+.date-picker-container {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  padding: 12px 12px;
+  font-size: 14px;
+  color: #333;
+  width: 180px;
+  background-color: white;
+  gap: 8px;
+  cursor: pointer;
+}
+
+#dateRangePicker {
+  border: none;
+  outline: none;
+  width: 100%;
+  font-size: 14px;
+  pointer-events: none;
+  background-color: transparent;
+}
+.gray-out {
+  color: rgb(160, 160, 160) !important;
+  pointer-events: auto !important;
+}
+.arrow-down {
+  width: 14px;
+  height: 14px;
+}

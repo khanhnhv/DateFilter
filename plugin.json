@@ -1,0 +1,5 @@
+{
+  "name": "date-time",
+  "source": ["widget.js"],
+  "style": ["styles/widget.css", "styles/daterangepicker.css"]
+}
