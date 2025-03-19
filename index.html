@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Date Range Picker - Chọn Quý</title>
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.css"
+    />
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/moment@2.29.1/moment.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.min.js"></script>
+  </head>
+  <body>
+    <input type="text" id="datepicker" placeholder="Chọn quý" />
+
+    <script>
+      function getQuarterRange(year, quarter) {
+        let startMonth = (quarter - 1) * 3;
+        let endMonth = startMonth + 2;
+        return {
+          startDate: moment([year, startMonth, 1]),
+          endDate: moment([year, endMonth + 1, 0]),
+        };
+      }
+
+      $(document).ready(function () {
+        $("#datepicker").daterangepicker({
+          autoUpdateInput: false,
+          showDropdowns: true,
+          alwaysShowCalendars: true,
+          locale: {
+            format: "DD/MM/YYYY",
+            cancelLabel: "Hủy",
+            applyLabel: "Chọn",
+          },
+        });
+
+        $("#datepicker").on("apply.daterangepicker", function (ev, picker) {
+          let currentValue = $(this).val();
+          let newRange =
+            picker.startDate.format("DD/MM/YYYY") +
+            " - " +
+            picker.endDate.format("DD/MM/YYYY");
+          if (currentValue) {
+            $(this).val(currentValue + "; " + newRange);
+          } else {
+            $(this).val(newRange);
+          }
+        });
+      });
+    </script>
+  </body>
+</html>
