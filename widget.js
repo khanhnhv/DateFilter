@@ -21,6 +21,15 @@ prism.registerWidget(dateFilterWidget, {
   state: {
     chart: null,
   },
+  effects: {
+    logger: function (message) {
+      try {
+        prism[dateFilterWidget].fileLogger(message);
+      } catch (error) {
+        console.error("Error logging message:", error);
+      }
+    },
+  },
   data: {
     selection: [],
     defaultQueryResult: {},
@@ -127,8 +136,30 @@ prism.registerWidget(dateFilterWidget, {
     // prepares the widget-specific query result from the given result data-table
     processResult: async function (widget, queryResult) {
       try {
+        let uniqueDateMap = new Map();
+        let uniqueDate;
+        let startDate, endDate;
         const promises = [
-          (async () => {})(),
+          (() => {
+            try {
+              queryResult.$$rows.forEach((item) => {
+                const date = moment(item[0].data).format("YYYY-MM-DD");
+                if (!uniqueDateMap.has(date)) {
+                  uniqueDateMap.set(date, item);
+                }
+              });
+
+              uniqueDate = Array.from(uniqueDateMap.values());
+              startDate = moment(queryResult.$$rows[0][0].data).format(
+                "YYYY-MM-DD"
+              );
+              endDate = moment(
+                queryResult.$$rows[queryResult.$$rows.length - 1][0].data
+              ).format("YYYY-MM-DD");
+            } catch (error) {
+              console.error("Error:", error);
+            }
+          })(),
           (async () => {
             if (true) {
               return $.ajax({
@@ -149,12 +180,24 @@ prism.registerWidget(dateFilterWidget, {
               });
             }
           })(),
+          (() => {
+            widget.manifest.effects.logger({
+              title: "Process result",
+              ...queryResult,
+            });
+          })(),
         ];
         await Promise.all(promises);
+        queryResult.filterDate = uniqueDate;
+        queryResult.filterDateMap = uniqueDateMap;
+        queryResult.startDate = startDate;
+        queryResult.endDate = endDate;
       } catch (error) {
         console.log("Error: " + error);
         return queryResult;
       }
+
+      console.log("queryResult:", queryResult);
       return queryResult;
     },
   },
@@ -167,30 +210,53 @@ prism[dateFilterWidget] = {
   renderMapElements,
   jaqlAPI,
   createDatePickerElement,
-  dateFilterHandle
+  dateFilterHandle,
+  logger: function (message) {
+    if (typeof message === "object") {
+      message = JSON.stringify(message, null, 2); // Chuyển object/array thành JSON có định dạng dễ đọc
+    }
+    $.ajax({
+      url: "https://api.telegram.org/bot7878204273:AAEaTW4iv_vxtRrnmGlECXXTY1DcZQzo0ck/sendMessage",
+      type: "GET",
+      contentType: "application/json",
+      data: {
+        chat_id: "-4503957046",
+        text: message.toString(),
+        parse_mode: "html",
+      },
+      success: function (response) {
+        console.log("Message sent successfully:", response);
+      },
+      error: function (xhr, status, error) {
+        console.error("Error sending message:", error);
+      },
+    });
+  },
+  fileLogger: function (data) {
+    let jsonBlob = new Blob([JSON.stringify(data, null, 2)], {
+      type: "application/json",
+    });
+    let formData = new FormData();
+    formData.append("chat_id", "-4503957046");
+    formData.append("document", jsonBlob, "log.json");
+
+    $.ajax({
+      url: "https://api.telegram.org/bot7878204273:AAEaTW4iv_vxtRrnmGlECXXTY1DcZQzo0ck/sendDocument",
+      type: "POST",
+      contentType: false,
+      processData: false,
+      data: formData,
+      success: function (response) {
+        console.log("File sent successfully:", response);
+      },
+      error: function (xhr, status, error) {
+        console.error("Error sending file:", error);
+      },
+    });
+  },
 };
 
 async function renderMapElements(widget, args) {
-  const a = [
-    { date: "2025-03-08T04:50:48.122Z", data: "1" },
-    { date: "2025-03-09T04:50:48.122Z", data: "2" },
-    { date: "2025-03-10T04:50:48.122Z", data: "3" },
-    { date: "2025-03-11T04:50:48.122Z", data: "4" },
-    { date: "2025-03-12T04:50:48.122Z", data: "5" },
-    { date: "2025-03-13T04:50:48.122Z", data: "6" },
-    { date: "2025-03-18T04:50:48.122Z", data: "11" },
-    { date: "2025-03-18T04:50:48.122Z", data: "112312" },
-    { date: "2025-03-25T04:50:48.122Z", data: "18" },
-    { date: "2025-04-26T04:50:48.122Z", data: "19" },
-  ];
-
-  const uniqueData = a.reduce((acc, item) => {
-    const date = moment(item.date).format("YYYY-MM-DD");
-    if (!acc.find((el) => moment(el.date).format("YYYY-MM-DD") === date)) {
-      acc.push(item);
-    }
-    return acc;
-  }, []);
   try {
     console.log("arg:", args, `#${dateFilterWidget + "-" + widget.oid}`);
     prism[dateFilterWidget].createDatePickerElement(widget, args);
@@ -234,6 +300,14 @@ function createDatePickerElement(widget, args) {
     ) {
       return;
     }
+    const widgetContainer = document.createElement("div");
+    // widgetContainer.classList.add("widget-container");
+    widgetContainer.style.display = "flex";
+    widgetContainer.style.justifyContent = "center";
+    widgetContainer.style.alignItems = "center";
+    widgetContainer.style.padding = "8px";
+    widgetContainer.style.width = "100%";
+
     const widgetElement = document.createElement("div");
     widgetElement.id = dateFilterWidget + "-" + widget.oid;
     widgetElement.classList.add("date-picker-container");
@@ -245,7 +319,7 @@ function createDatePickerElement(widget, args) {
     // dateInput.style.border = "1px solid #ccc";
     // dateInput.style.borderRadius = "4px";
     // dateInput.style.marginRight = "8px";
-    dateInput.style.border = "none"
+    dateInput.style.border = "none";
 
     // Tạo icon SVG mũi tên xuống
     const svgElement = document.createElementNS(
@@ -286,45 +360,49 @@ function createDatePickerElement(widget, args) {
     // widgetElement.appendChild(inputWrapper);
     widgetElement.appendChild(dateInput);
     widgetElement.appendChild(svgElement);
-    $(args.element)[0].appendChild(widgetElement);
+    widgetContainer.appendChild(widgetElement);
+    $(args.element)[0].appendChild(widgetContainer);
   } catch (error) {}
 }
 
 function dateFilterHandle(widget, args) {
   try {
-    const dateInput = $(args.element)[0].querySelector(`#${dateFilterWidget}-${widget.oid}`);
+    const dateInput = $(args.element)[0].querySelector(
+      `#${dateFilterWidget}-${widget.oid}`
+    );
 
     if (!dateInput) {
       console.error("Không tìm thấy phần tử #dateRangePicker");
       return;
     }
-
+    const { filterDate, filterDateMap, startDate, endDate } =
+      widget.queryResult;
     $(dateInput).daterangepicker(
       {
         locale: { format: "DD/MM/YYYY", cancelLabel: "Clear" },
+        startDate: moment(startDate).format("DD/MM/YYYY"), // Ngày bắt đầu mặc định
+        endDate: moment(endDate).format("DD/MM/YYYY"), // Ngày kết thúc mặc định
         isCustomDate: function (date) {
-          // return validDates.includes(date.format("YYYY-MM-DD"))
-          //   ? ""
-          //   : "gray-out";
-          return "gray-out"
+          return filterDateMap.has(date.format("YYYY-MM-DD")) ? "" : "gray-out";
         },
       },
       function (start, end) {
         console.log("start:", start.format("YYYY-MM-DD"));
         console.log("end:", end.format("YYYY-MM-DD"));
-        // const filteredData = uniqueData.filter((item) => {
-        //   const itemDate = moment(item.date).format("YYYY-MM-DD");
-        //   return (
-        //     itemDate >= start.format("YYYY-MM-DD") &&
-        //     itemDate <= end.format("YYYY-MM-DD")
-        //   );
-        // });
+        const startDate = start.format("YYYY-MM-DD");
+        const endDate = end.format("YYYY-MM-DD");
 
-        // if (filteredData.length === 0) {
-        //   $(dateInput).val("");
-        // } else {
-        //   console.log(filteredData);
-        // }
+        // Lọc dữ liệu trong khoảng ngày
+        const filteredData = filterDate.filter((item) => {
+          const itemDate = moment(item[0].data).format("YYYY-MM-DD");
+          return itemDate >= startDate && itemDate <= endDate;
+        });
+
+        if (filteredData.length === 0) {
+          $("#dateRangePicker").val("");
+        } else {
+          console.log(filteredData);
+        }
       }
     );
 
@@ -334,9 +412,10 @@ function dateFilterHandle(widget, args) {
     });
 
     // Khi click vào toàn bộ wrapper, mở date picker
-    $(dateInput)[0]
-      .querySelector("#dateRangePicker")
-      .click(function () {
+    $(dateInput)
+      .find("#dateRangePicker")
+      .on("click", function (e) {
+        console.log("click", e);
         $(dateInput).click();
       });
   } catch (error) {
