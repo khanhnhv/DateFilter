@@ -10,26 +10,164 @@ prism.registerWidget(dateFilterWidget, {
   styleEditorTemplate: null,
   style: {
     treeData: null,
+    isFilter: false,
     isWidgetAvailable: function (option) {
       if (!option) {
         return true;
       }
-      // return isTenantAvailableToUseWidget(prism.user.tenantId, option);
       return true;
     },
   },
   state: {
-    chart: null,
+    selectedDates: [],
+    dateRanges: [],
+    dateRangesStr: null,
+    flatpickrInstance: null,
+    element: {},
+    parentEl: null,
   },
   effects: {
+    $$element: {
+      clearSelectionButton: null,
+    },
+
+    clearSelection: function ({ widget }) {
+      prism.activeDashboard.filters.update(
+        {
+          jaql: {
+            ...widget.queryResult.metadata()[0].jaql,
+            filter: {
+              explicit: false,
+              multiSelection: true,
+              all: true,
+            },
+          },
+        },
+        { refresh: true, save: true }
+      );
+      // widget.manifest.sta get(0)._flatpickr.setDate(newDates, true); /// chưa sửa lỗi duplicate filter
+
+    },
+
+    hideButtonClearSelection: function ({ clearSelectionButton }) {
+      clearSelectionButton.classList.add("widget-toolbar-btn--clear");
+    },
+
+    beforeRenderMapElements: function (widget, args) {
+      try {
+        const parentElement = widget.manifest.state.parentEl.parentElement;
+        const clearSelectionButton = parentElement.querySelector(
+          '[title="Clear Selection"]'
+        );
+
+        let _this = this;
+
+        if (clearSelectionButton) {
+          this.$$element.clearSelectionButton = clearSelectionButton;
+
+          clearSelectionButton.removeAttribute("command");
+
+          clearSelectionButton.addEventListener("click", () => {
+            _this.clearSelection({ widget });
+            _this.hideButtonClearSelection({
+              clearSelectionButton: this.$$element.clearSelectionButton,
+            });
+          });
+        }
+      } catch (error) {
+        console.log("beforeRenderMapElements: ", error);
+      }
+    },
+
     logger: function (message) {
       try {
-        prism[dateFilterWidget].fileLogger(message);
+        // prism[dateFilterWidget].fileLogger(message);
       } catch (error) {
         console.error("Error logging message:", error);
       }
     },
+    handleDashboardFilter: function ({
+      widget,
+      selectedFeature,
+      selectedJaql,
+    }) {
+      try {
+        console.log("Selected geo:", selectedFeature, features);
+        if (prism.activeWidget != null) {
+          return;
+        }
+
+        if (selectedFeature !== undefined) {
+          if (!widget.style.isFilter) {
+            widget.style.isFilter = true;
+          }
+          let existingFilter;
+          try {
+            existingFilter = prism.activeDashboard.filters.$$items.find(
+              (item) =>
+                item?.jaql?.column === selectedJaql.column &&
+                item?.jaql?.dim === selectedJaql.dim
+            );
+          } catch (error) {
+            console.log("focusFeature: ", error);
+          }
+
+          this.updateDashboardFilter({
+            widget: widget,
+            selectedFeature: selectedFeature,
+            layerIndex: 0,
+            existingFilter: existingFilter,
+          });
+        }
+      } catch (error) {
+        console.log("focusFeature: ", error);
+      }
+    },
+    viewButtonClearSelection: function ({ clearSelectionButton }) {
+      clearSelectionButton.classList.remove("widget-toolbar-btn--clear");
+    },
+    updateDashboardFilter: function ({
+      widget,
+      selectedFeature,
+      layerIndex,
+      existingFilter,
+    }) {
+      console.log("Updating filter...", {
+        jaql: {
+          ...widget.queryResult.metadata()[layerIndex].jaql,
+          filter: {
+            level: "days",
+            explicit: true,
+            multiSelection: true,
+            members: [...selectedFeature],
+          },
+        },
+      });
+
+      this.viewButtonClearSelection({
+        clearSelectionButton: this.$$element.clearSelectionButton,
+      });
+      /// chưa sửa lỗi duplicate filter
+      prism.activeDashboard.filters.update(
+        {
+          jaql: {
+            ...widget.queryResult.metadata()[layerIndex].jaql,
+            filter: {
+              members: [
+                ...(existingFilter?.jaql.filter?.all ||
+                !existingFilter?.jaql.filter?.members.length
+                  ? []
+                  : existingFilter?.jaql.filter?.members || []),
+                ...selectedFeature,
+              ],
+            },
+          },
+        },
+        { refresh: true, save: true }
+      );
+    },
   },
+
   data: {
     selection: [],
     defaultQueryResult: {},
@@ -38,17 +176,9 @@ prism.registerWidget(dateFilterWidget, {
         name: "values",
         type: "visible",
         canDisableItems: true,
-        // itemAttributes: ["color", "nullzero"],
         visibility: function (widget) {
           return widget.style.isWidgetAvailable();
         },
-        // allowedColoringTypes: function (widget) {
-        //   return {
-        //     color: true,
-        //     range: true,
-        //     condition: true,
-        //   };
-        // },
         metadata: {
           types: ["dimensions", "measures"],
           maxitems: 1,
@@ -143,19 +273,18 @@ prism.registerWidget(dateFilterWidget, {
           (() => {
             try {
               queryResult.$$rows.forEach((item) => {
-                const date = moment(item[0].data).format("YYYY-MM-DD");
+                const date = flatpickr.formatDate(
+                  new Date(item[0].data),
+                  "d-m-Y"
+                );
                 if (!uniqueDateMap.has(date)) {
                   uniqueDateMap.set(date, item);
                 }
               });
 
               uniqueDate = Array.from(uniqueDateMap.values());
-              startDate = moment(queryResult.$$rows[0][0].data).format(
-                "YYYY-MM-DD"
-              );
-              endDate = moment(
-                queryResult.$$rows[queryResult.$$rows.length - 1][0].data
-              ).format("YYYY-MM-DD");
+              startDate = uniqueDate[0][0].data;
+              endDate = uniqueDate[uniqueDate.length - 1][0].data;
             } catch (error) {
               console.error("Error:", error);
             }
@@ -165,6 +294,16 @@ prism.registerWidget(dateFilterWidget, {
               return $.ajax({
                 type: "GET",
                 url: `/plugins/${dateFilterWidget}/resources/daterangepicker.min.js`,
+                dataType: "script",
+                cache: true,
+              });
+            }
+          })(),
+          (async () => {
+            if (true) {
+              return $.ajax({
+                type: "GET",
+                url: `/plugins/${dateFilterWidget}/resources/flatpickr.js`,
                 dataType: "script",
                 cache: true,
               });
@@ -201,13 +340,14 @@ prism.registerWidget(dateFilterWidget, {
       return queryResult;
     },
   },
+
   render: function (widget, args) {
-    prism[dateFilterWidget].renderMapElements(widget, args);
+    prism[dateFilterWidget].renderWidgetElements(widget, args);
   },
 });
 
 prism[dateFilterWidget] = {
-  renderMapElements,
+  renderWidgetElements,
   jaqlAPI,
   createDatePickerElement,
   dateFilterHandle,
@@ -254,11 +394,22 @@ prism[dateFilterWidget] = {
       },
     });
   },
+  formatAriaLabelToDMY: function (ariaLabel) {
+    let dateObj = new Date(ariaLabel);
+    return dateObj.toLocaleDateString("en-GB").split("/").join("-");
+  },
 };
 
-async function renderMapElements(widget, args) {
+async function renderWidgetElements(widget, args) {
   try {
     console.log("arg:", args, `#${dateFilterWidget + "-" + widget.oid}`);
+    if (
+      $(args.element)[0].querySelector(
+        `#${dateFilterWidget + "-" + widget.oid}`
+      )
+    ) {
+      return;
+    }
     prism[dateFilterWidget].createDatePickerElement(widget, args);
     prism[dateFilterWidget].dateFilterHandle(widget, args);
   } catch (error) {
@@ -294,12 +445,12 @@ function jaqlAPI(jaql) {
 function createDatePickerElement(widget, args) {
   try {
     if (
-      $(args.element)[0].querySelector(
-        `#${dateFilterWidget + "-" + widget.oid}`
-      )
+      !widget.manifest.state.parentEl ||
+      widget.manifest.state.parentEl !== $(args.element)[0]
     ) {
-      return;
+      widget.manifest.state.parentEl = $(args.element)[0];
     }
+    widget.manifest.effects.beforeRenderMapElements(widget, args);
     const widgetContainer = document.createElement("div");
     // widgetContainer.classList.add("widget-container");
     widgetContainer.style.display = "flex";
@@ -313,9 +464,13 @@ function createDatePickerElement(widget, args) {
     widgetElement.classList.add("date-picker-container");
     const dateInput = document.createElement("input");
     dateInput.type = "text";
-    dateInput.id = "dateRangePicker";
+    dateInput.id = "dateRangePicker" + widget.oid;
+    dateInput.classList.add("dateRangePicker");
     dateInput.placeholder = "Select Date Range";
     dateInput.style.padding = "5px";
+    if (widget.manifest.state.dateRangesStr) {
+      dateInput.value = widget.manifest.state.dateRangesStr;
+    }
     // dateInput.style.border = "1px solid #ccc";
     // dateInput.style.borderRadius = "4px";
     // dateInput.style.marginRight = "8px";
@@ -360,6 +515,7 @@ function createDatePickerElement(widget, args) {
     // widgetElement.appendChild(inputWrapper);
     widgetElement.appendChild(dateInput);
     widgetElement.appendChild(svgElement);
+    widget.manifest.state.element.dateInput = dateInput;
     widgetContainer.appendChild(widgetElement);
     $(args.element)[0].appendChild(widgetContainer);
   } catch (error) {}
@@ -367,6 +523,27 @@ function createDatePickerElement(widget, args) {
 
 function dateFilterHandle(widget, args) {
   try {
+    formatAriaLabelToDMY = prism[dateFilterWidget].formatAriaLabelToDMY;
+    const debouncedOnChange = _.debounce(function (
+      selectedDatesArray,
+      dateStr,
+      instance
+    ) {
+      let dateRanges = selectedDatesArray.map((date) =>
+        flatpickr.formatDate(date, "Y-m-dT00:00:00")
+      );
+
+      widget.manifest.effects.handleDashboardFilter({
+        widget: widget,
+        selectedFeature: dateRanges,
+        selectedJaql: widget.queryResult.metadata()[0].jaql,
+      });
+      let inputElement = widget.manifest.state.element.dateInput;
+      inputElement.value = dateStr;
+      widget.manifest.state.dateRanges = dateRanges;
+      widget.manifest.state.dateRangesStr = dateStr;
+    },
+    700);
     const dateInput = $(args.element)[0].querySelector(
       `#${dateFilterWidget}-${widget.oid}`
     );
@@ -377,47 +554,36 @@ function dateFilterHandle(widget, args) {
     }
     const { filterDate, filterDateMap, startDate, endDate } =
       widget.queryResult;
-    $(dateInput).daterangepicker(
+    widget.manifest.state.flatpickrInstance = flatpickr(
+      "#dateRangePicker" + widget.oid,
       {
-        locale: { format: "DD/MM/YYYY", cancelLabel: "Clear" },
-        startDate: moment(startDate).format("DD/MM/YYYY"), // Ngày bắt đầu mặc định
-        endDate: moment(endDate).format("DD/MM/YYYY"), // Ngày kết thúc mặc định
-        isCustomDate: function (date) {
-          return filterDateMap.has(date.format("YYYY-MM-DD")) ? "" : "gray-out";
+        mode: "multiple",
+        dateFormat: "d-m-Y",
+        defaultDate: [startDate],
+        // minDate: startDate,
+        // maxDate: endDate,
+        // disable: [
+        //   function (date) {
+        //     return !filterDateMap.has(flatpickr.formatDate(date, "d-m-Y"));
+        //   },
+        // ],
+        onDayCreate: function (dObj, dStr, fp, dayElem) {
+          if (
+            widget.manifest.state.selectedDates.includes(
+              formatAriaLabelToDMY(dayElem.getAttribute("aria-label"))
+            )
+          ) {
+            dayElem.classList.add("selected");
+          }
         },
-      },
-      function (start, end) {
-        console.log("start:", start.format("YYYY-MM-DD"));
-        console.log("end:", end.format("YYYY-MM-DD"));
-        const startDate = start.format("YYYY-MM-DD");
-        const endDate = end.format("YYYY-MM-DD");
-
-        // Lọc dữ liệu trong khoảng ngày
-        const filteredData = filterDate.filter((item) => {
-          const itemDate = moment(item[0].data).format("YYYY-MM-DD");
-          return itemDate >= startDate && itemDate <= endDate;
-        });
-
-        if (filteredData.length === 0) {
-          $("#dateRangePicker").val("");
-        } else {
-          console.log(filteredData);
-        }
+        onChange: debouncedOnChange,
       }
     );
 
-    // Xử lý sự kiện "Clear"
-    $(dateInput).on("cancel.daterangepicker", function (ev, picker) {
-      $(this).val("");
+    $(dateInput).on("click", function (e) {
+      // console.log("click", e);
+      widget.manifest.state.flatpickrInstance.open();
     });
-
-    // Khi click vào toàn bộ wrapper, mở date picker
-    $(dateInput)
-      .find("#dateRangePicker")
-      .on("click", function (e) {
-        console.log("click", e);
-        $(dateInput).click();
-      });
   } catch (error) {
     console.error("Error:", error);
   }

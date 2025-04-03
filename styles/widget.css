@@ -1,3 +1,26 @@
+.flatpickr-day.selected {
+  background: #ffcc00 !important; /* Màu vàng cho ngày được chọn */
+  color: black !important;
+  border-radius: 50%;
+}
+.flatpickr-day.inRange {
+  background: #ffeb99 !important; /* Màu vàng nhạt cho phạm vi */
+  color: black !important;
+}
+/* .date-picker-container {
+  position: relative;
+  display: inline-block;
+} */
+.popup-footer {
+  text-align: right;
+  padding: 10px;
+  border-top: 1px solid #ddd;
+}
+.popup-footer button {
+  margin-left: 5px;
+  padding: 5px 10px;
+  cursor: pointer;
+}
 .date-picker-container {
   position: relative;
   display: inline-flex;
@@ -7,13 +30,13 @@
   padding: 12px 12px;
   font-size: 14px;
   color: #333;
-  width: 180px;
+  width: 225px;
   background-color: white;
   gap: 8px;
   cursor: pointer;
 }
 
-#dateRangePicker {
+.dateRangePicker {
   border: none;
   outline: none;
   width: 100%;
